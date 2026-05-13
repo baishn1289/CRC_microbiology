@@ -11,13 +11,13 @@ list_lps <- c(
 )
 
 list_polyamines <- c(
-  "PWY-6922", "PWY-5004",           
+  "PWY-6922", "PWY-5004",         
   "ARG+POLYAMINE-SYN", "POLYAMSYN-PWY", 
   "MET-SAM-PWY", "HOMOSER-METSYN-PWY", 
   "PWY-8187", "AST-PWY","PWY-6328",          
-  "3.5.3.1",'3.5.3.23',            
+  "3.5.3.1",'3.5.3.23',       
   "1.4.1.11",
-  "1.4.1.4"
+  "1.4.1.4" 
 )
 
 ec_list_fig4 <- c(list_succinate, list_lps, list_polyamines)[str_starts(c(list_succinate, list_lps, list_polyamines),'[0-9]')]
@@ -48,7 +48,6 @@ ec_manual_map <- c(
 
 simplify_ec_label_v3 <- function(x) {
   out <- as.character(x)
-  
   out <- str_remove_all(
     out,
     "\\s*\\([^\\)]*(deaminating|decarboxylating|forming|ADP-forming|ATP-forming|pyruvate-forming|adding.*units)[^\\)]*\\)"
@@ -65,7 +64,6 @@ simplify_ec_label_v3 <- function(x) {
   )
   
   out <- str_squish(out)
-
   for (ec in names(ec_manual_map)) {
     out <- ifelse(
       str_detect(out, fixed(ec)),
@@ -83,9 +81,13 @@ simplify_metacyc_label <- function(x) {
   is_meta <- str_detect(out, "^(PWY-|[A-Z0-9\\+\\-]+-PWY|AST-PWY|ARG\\+|MET-)")
   if (any(is_meta, na.rm = TRUE)) {
     tmp <- out[is_meta]
+    
     tmp <- str_remove_all(tmp, "\\b(dTDP|UDP|GDP|CMP)-")
+
     tmp <- str_remove_all(tmp, "\\b(alpha|beta|delta|D|L|Nδ)-")
+
     tmp <- str_replace(tmp, "O-antigen building blocks biosynthesis", "O-antigen biosynthesis")
+
     tmp <- str_remove_all(tmp, "\\s*\\([^\\)]*(E\\. coli|putida|P\\. putida|E\\.coli)[^\\)]*\\)")
     
     tmp <- str_squish(tmp)
@@ -103,14 +105,14 @@ plot_data <- left_join(all_data_raw,metacyc_ec_interaction_result,
     Pathway  = ifelse(Pathway =='1.3.5.4','1.3.5.4 (mapped by HUMAnN3)',Pathway),
     Pathway = ifelse(is.na(Preferred_Name),Pathway,paste(Pathway,Preferred_Name,sep = ': ')),
     Category = case_when(
-    Pathway_Short %in% list_succinate ~ "Module 1\nReconfigured Carbon Flux\n(Enzymatic Re-weighting of Succinate)",
-    Pathway_Short %in% list_lps       ~ "Module 2\nCell Surface Remodeling\n(Hyper-Virulence & Camouflage)",
-    Pathway_Short %in% list_polyamines ~ "Module 3\nNitrogen Toxicity\n(Polyamine Blockade & Putrefaction)"
+    Pathway_Short %in% list_succinate ~ "Reconfigured Carbon Flux\n(Enzymatic Re-weighting of Succinate)",
+    Pathway_Short %in% list_lps       ~ "Cell Surface Remodeling\n(Hyper-Virulence & Camouflage)",
+    Pathway_Short %in% list_polyamines ~ "Nitrogen Toxicity\n(Polyamine Blockade & Putrefaction)"
   )) %>%
   mutate(Category = factor(Category, levels = c(
-    "Module 1\nReconfigured Carbon Flux\n(Enzymatic Re-weighting of Succinate)",
-    "Module 2\nCell Surface Remodeling\n(Hyper-Virulence & Camouflage)",
-    "Module 3\nNitrogen Toxicity\n(Polyamine Blockade & Putrefaction)"
+    "Reconfigured Carbon Flux\n(Enzymatic Re-weighting of Succinate)",
+    "Cell Surface Remodeling\n(Hyper-Virulence & Camouflage)",
+    "Nitrogen Toxicity\n(Polyamine Blockade & Putrefaction)"
   ))) %>%    group_by(Pathway_Short) %>%
   mutate(
     Marker_Sig = case_when(`qval.fdr` < 0.1 ~ "Significant (q < 0.1)",
@@ -144,17 +146,6 @@ plot_data <- left_join(all_data_raw,metacyc_ec_interaction_result,
       # gsub("\\bderived\\b", "derived\n", ., perl = TRUE)
       ) 
 
-min_coef <- min(plot_data$coef, na.rm = TRUE)
-data_range <- max(plot_data$coef, na.rm = TRUE) - min_coef
-
-
-offset_sig <- 0.16  
-offset_i2  <- 0.12 
-offset_p_interaction  <- 0.08
-
-marker_pos_sig <- min_coef - (data_range * offset_sig)
-marker_pos_i2  <- min_coef - (data_range * offset_i2)
-marker_pos_p_interaction  <- min_coef - (data_range * offset_p_interaction)
 
 order_levels <- plot_data %>%
   filter(Group == "EO") %>%
@@ -168,93 +159,218 @@ order_levels <- plot_data %>%
 order_levels
 
 plot_data$Pathway <- factor(plot_data$Pathway, levels = order_levels)
+
+
+module_1_label <- "Reconfigured Carbon Flux\n(Enzymatic Re-weighting of Succinate)"
+module_2_label <- "Cell Surface Remodeling\n(Hyper-Virulence & Camouflage)"
+module_3_label <- "Nitrogen Toxicity\n(Polyamine Blockade & Putrefaction)"
+
+offset_sig <- 0.16  
+offset_i2  <- 0.12 
+offset_p_interaction  <- 0.08
+
+stats_metric_breaks <- c(
+  "Significant (q < 0.1)",
+  "Non-significant",
+  "Consistent (QC_pass)",
+  "Specific (P_Interaction < 0.05)",
+  "NA"
+)
+
+make_module_barplot <- function(plot_data_sub, plot_title = NULL) {
+
+  sub_order_levels <- plot_data_sub %>%
+    filter(Group == "EO") %>%
+    group_by(Category) %>%
+    arrange(
+      factor(ID_type, levels = c("ec", "metacyc")),
+      abs(coef),
+      .by_group = TRUE
+    ) %>%
+    ungroup() %>%
+    pull(Pathway)
   
-p <- ggplot(plot_data, aes(y = Pathway, x = coef, group = Group)) +
-
-  geom_col(aes(fill = Group), position = position_dodge(width = 0.8), width = 0.7) +
+  plot_data_sub <- plot_data_sub %>%
+    mutate(Pathway = factor(Pathway, levels = sub_order_levels))
   
-  geom_point(aes(x = marker_pos_sig, color = Marker_Sig), 
-             position = position_dodge(width = 0.8), 
-             shape = 15, size = 3, na.rm = TRUE) +
-  geom_point(aes(x = marker_pos_p_interaction, color = Marker_P_interaction), 
-             position = position_dodge(width = 0.8), 
-             shape = 15, size = 3, na.rm = TRUE) +
-  geom_point(aes(x = marker_pos_i2, color = Marker_qc), 
-             position = position_dodge(width = 0.8), 
-             shape = 15, size = 3, na.rm = TRUE) +
-
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-
-  facet_grid(Category ~ ., scales = "free_y", space = "free_y") +
-
-  scale_color_manual(
-    name = "Statistical Metrics", 
-
-    breaks = c(
-      "Significant (q < 0.1)",
-      "Non-significant",
-      "NA",
-      "Consistent (QC_pass)",
-      "Specific (P_Interaction < 0.05)"
-    ),
-
-    values = c(
-      "Significant (q < 0.1)"            = "#fc8d59", 
-      "Non-significant"        = "#a65628", 
-      "NA"  = "#d9d9d9",  
-      "Consistent (QC_pass)"              = "#984ea3",  
-      "Specific (P_Interaction < 0.05)"   = "#8da0cb"   
-    ),
-
-    na.translate = FALSE
-  ) +
+  # 定义 x 范围
+  min_coef <- min(plot_data_sub$coef, na.rm = TRUE)
+  data_range <- max(plot_data_sub$coef, na.rm = TRUE) - min_coef
   
-  scale_fill_manual(
-    name = "Cohort Group",
-    values = c("EO" = "#EE0000", "LO" = "#3B4992")
-  ) + 
+  marker_pos_sig <- min_coef - (data_range * offset_sig)
+  marker_pos_i2  <- min_coef - (data_range * offset_i2)
+  marker_pos_p_interaction  <- min_coef - (data_range * offset_p_interaction)
   
+  sub_final_xlim_min <- marker_pos_sig * 1.05
+  sub_final_xlim_max <- max(plot_data_sub$coef, na.rm = TRUE) * 1.05
+  
+  ggplot(plot_data_sub, aes(y = Pathway, x = coef, group = Group)) +
+    geom_col(
+      aes(fill = Group),
+      position = position_dodge(width = 0.8),
+      width = 0.7
+    ) +
+    
+    geom_point(
+      aes(x = marker_pos_sig, color = Marker_Sig),
+      position = position_dodge(width = 0.8),
+      shape = 15, size = 3, na.rm = TRUE
+    ) +
+    geom_point(
+      aes(x = marker_pos_p_interaction, color = Marker_P_interaction),
+      position = position_dodge(width = 0.8),
+      shape = 15, size = 3, na.rm = TRUE
+    ) +
+    geom_point(
+      aes(x = marker_pos_i2, color = Marker_qc),
+      position = position_dodge(width = 0.8),
+      shape = 15, size = 3, na.rm = TRUE
+    ) +
+    
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    
+    facet_grid(Category ~ ., scales = "free_y", space = "free_y") +
+    
+    scale_color_manual(
+      name = "Statistical Metrics",
+      breaks = stats_metric_breaks,
+      values = c(
+        "Significant (q < 0.1)"           = "#fc8d59",
+        "Non-significant"                 = "#a65628",
+        "NA"                              = "#d9d9d9",
+        "Consistent (QC_pass)"            = "#984ea3",
+        "Specific (P_Interaction < 0.05)" = "#8da0cb"
+      ),
+      na.translate = FALSE
+    )  +
+    
+    scale_fill_manual(
+      name = "Cohort Group",
+      values = c("EO" = "#EE0000", "LO" = "#3B4992")
+    ) +
+    
+    guides(
+      fill = guide_legend(
+        order = 1
+      ),
+      color = guide_legend(
+        order = 2,
+        title.position = "top",
+        ncol = 1,
+        byrow = TRUE
+      )
+    ) +
+    
+    theme_bw() +
+    labs(
+      x = "Pooled-analysis Coefficient (Effect Size)",
+      y = NULL,
+      title = plot_title
+    ) +
+    theme(
+      axis.text.y = element_text(size = 11, face = "bold", color = "black"),
+      axis.text.x = element_text(size = 11),
+      strip.text = element_text(size = 11, face = "bold", lineheight = 0.8),
+      strip.background = element_rect(fill = "grey95"),
+      panel.grid = element_blank(),
+      axis.ticks.y = element_blank(),
+      legend.position = "bottom",
+      legend.box = "vertical",
+      legend.direction = "horizontal",
+      legend.margin = margin(t = 10),
+      legend.text = element_text(size = 12),
+      legend.title = element_text(face = "bold")
+    ) +
+    coord_cartesian(
+      xlim = c(sub_final_xlim_min, sub_final_xlim_max),
+      clip = "off"
+    )
+}
+
+p_fig4_all <- make_module_barplot(
+  plot_data_sub = plot_data,
+  plot_title = "Age-Stratified Pooled-analysis of Microbial Pathways in Colorectal Cancer"
+)
+
+ggsave(paste0(base_symbol,"downstream_analysis/output/picture/18.pwy_ec_barplot.pdf"),
+       p_fig4_all, width = 12.72727, height = 18,
+       device = cairo_pdf)  #A4比例0.7070707 21x29.7
+
+plot_data_12 <- plot_data %>%
+  filter(Category %in% c(module_1_label, module_2_label)) %>%
+  droplevels()
+
+p_12 <- make_module_barplot(
+  plot_data_sub = plot_data_12,
+  plot_title = "Age-Stratified Pooled-analysis of Microbial Pathways in Colorectal Cancer"
+)+
+  theme(
+
+    plot.title = element_blank(),
+    
+
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.direction = "vertical",
+
+    legend.margin = margin(l = 8),
+
+    legend.text = element_text(size = 11),
+    legend.title = element_text(size = 11, face = "bold")
+  )
+
+print(p_12)
+
+ggsave(
+  paste0(base_symbol, "downstream_analysis/output/picture/18.pwy_ec_barplot_module12.pdf"),
+  p_12,
+  width = 12.72727, height = 9,
+  device = cairo_pdf
+)
+
+plot_data_3 <- plot_data %>%
+  filter(Category == module_3_label) %>%
+  droplevels()
+
+p_3 <- make_module_barplot(
+  plot_data_sub = plot_data_3,
+  plot_title = "Age-Stratified Pooled-analysis of Microbial Pathways in Colorectal Cancer"
+) +
+  labs(title = NULL) +
   guides(
-    fill = guide_legend(order = 1), 
+    fill = guide_legend(
+      order = 1,
+      ncol = 1,
+      byrow = TRUE
+    ),
     color = guide_legend(
-      order = 2, 
+      order = 2,
       title.position = "top",
-      nrow = 2,
-      byrow = TRUE 
+      ncol = 1,
+      byrow = TRUE
     )
   ) +
-  theme_bw() +
-  labs(x = "Pooled-analysis Coefficient (Effect Size)", 
-       y = NULL, 
-       title = "Age-Stratified Pooled-analysis of Microbial Pathways in Colorectal Cancer") +
-  
   theme(
-    axis.text.y = element_text(size = 11, face = "bold", color = "black"),
-    axis.text.x = element_text(size = 11),
-    strip.text = element_text(size = 11, face = "bold", lineheight = 0.8), 
-    strip.background = element_rect(fill = "grey95"),
 
-    panel.grid = element_blank(), 
+    strip.text = element_blank(),
+    strip.background = element_blank(),
+    plot.title = element_blank(),
 
-    axis.ticks.y = element_blank(),
-
-    legend.position = "bottom",
+    legend.position = "right",
     legend.box = "vertical",
-    legend.direction = "horizontal",  
-    legend.margin = margin(t = 10),
-    legend.text = element_text(size = 12),
-    legend.title = element_text(face = "bold")
-  ) #+
+    legend.direction = "vertical",
 
+    legend.margin = margin(l = 8),
 
-final_xlim_min <- marker_pos_sig * 1.05
-p <- p + coord_cartesian(xlim = c(final_xlim_min, max(plot_data$coef) * 1.05), clip = "off")
+    legend.text = element_text(size = 11),
+    legend.title = element_text(size = 11, face = "bold")
+  )
 
+print(p_3)
 
-print(p)
-
-
-ggsave(paste0(base_symbol,"downstream_analysis/output/picture/18.pwy_ec_barplot.pdf"), 
-       p, width = 12.72727, height = 18,
-       device = cairo_pdf)  
-
+ggsave(
+  paste0(base_symbol, "downstream_analysis/output/picture/18.pwy_ec_barplot_module3.pdf"),
+  p_3,
+  width = 12.72727, height = 7,
+  device = cairo_pdf
+)
