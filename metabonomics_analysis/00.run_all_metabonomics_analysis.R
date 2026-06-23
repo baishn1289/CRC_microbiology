@@ -23,4 +23,18 @@ get_current_script_dir <- function() {
 }
 
 module_dir <- get_current_script_dir()
-source(file.path(module_dir, "00.run_all_metabonomics_analysis.R"), chdir = TRUE, local = FALSE, encoding = "UTF-8")
+module_files <- c(
+  "01.setup_and_config.R",
+  "02.general_helpers.R",
+  "03.targeted_panel_helpers.R",
+  "04.cross_omics_helpers.R",
+  "05.model_and_figure_helpers.R",
+  "06.metabolomics_core_analysis.R",
+  "07.cross_omics_support_analysis.R",
+  "08.composite_figures.R"
+)
+
+for (module_file in module_files) {
+  message("Sourcing ", module_file)
+  source(file.path(module_dir, module_file), chdir = TRUE, local = FALSE, encoding = "UTF-8")
+}
