@@ -2,4 +2,4 @@
 Code for the manuscript:
 
 Pan, et al.  
-*Distinct Microbial Signatures and Functional Landscapes in Early-Onset Colorectal Cancer: an international, multicohort, observational study* (manuscript in preparation).
+*Global metagenomics of early-onset colorectal cancer reveals stronger shared CRC associations and geographic heterogeneity* (manuscript in preparation).
